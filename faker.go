@@ -41,7 +41,7 @@ func printUsage() {
 }
 
 func printHelp() {
-    fmt.Println("faker, a file maker - a utility for creating files")
+    fmt.Println("faker, file maker - a utility for creating empty files with rolling timestamps")
     printUsage()
 }
 
@@ -96,7 +96,9 @@ func GetFilenames(name string, count int) (names []string) {
 }
 
 func createFile(name string, ts time.Time) {
-    if _, err := os.Create(name); err != nil {
+    if _, err := os.Stat(name); err == nil {
+        fmt.Printf("%s already exists, not touching\n", name)
+    } else if _, err := os.Create(name); err != nil {
         fmt.Printf("failed to create: %s\n", name)
     } else {
         if err := os.Chtimes(name, timeStamp, timeStamp); err != nil {
@@ -118,6 +120,8 @@ func main() {
 
     for _, name := range filenames {
         createFile(name, timeStamp)
-        timeStamp, _ = rollr.Roll(timeStamp)
+        if rollr != nil {
+            timeStamp, _ = rollr.Roll(timeStamp)
+        }
     }
 }
