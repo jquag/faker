@@ -7,23 +7,6 @@ import (
     "time"
 )
 
-var stringTests = []struct {
-    in  Roller
-    out string
-}{
-    {Roller{"day", 0}, "day+0"},
-    {Roller{"day", -0}, "day+0"},
-    {Roller{"month", -1}, "month-1"},
-    {Roller{"year", +1}, "year+1"},
-    {Roller{"week", +123}, "week+123"},
-}
-
-func TestString(t *testing.T) {
-    for _, tcase := range stringTests {
-        assert.Equal(t, tcase.out, tcase.in.String())
-    }
-}
-
 var casesForNew = []struct {
     in     string
     out    *Roller

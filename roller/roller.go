@@ -15,14 +15,6 @@ type Roller struct {
     Increment int
 }
 
-func (r *Roller) String() string {
-    if r.Increment >= 0 {
-        return fmt.Sprintf("%s+%d", r.RollType, r.Increment)
-    } else {
-        return fmt.Sprintf("%s%d", r.RollType, r.Increment)
-    }
-}
-
 func New(value string) (r *Roller, err error) {
     matchGroups := validRollerString.FindStringSubmatch(value)
     if matchGroups == nil {
