@@ -4,70 +4,69 @@ import (
     "errors"
     "flag"
     "fmt"
-    "github.com/jquag/faker/util"
+    "github.com/jquag/faker/roller"
     "os"
     "strconv"
+    "strings"
     "time"
 )
 
-type flagTimeStamp time.Time
-
-func (t *flagTimeStamp) String() string {
-    return time.Time(*t).String()
-}
-
-//TODO JQ: don't use these special Args because the default value is jacked up
-func (t *flagTimeStamp) Set(value string) (err error) {
-    var ts time.Time
-    if len(value) == 8 {
-        ts, err = time.Parse("20060102", value)
-    } else {
-        ts, err = time.Parse("20060102150405", value)
-    }
-    *t = flagTimeStamp(ts)
-    return err
-}
+const dateLayout, timeLayout = "20060102", "150405"
 
 var flagSet *flag.FlagSet
-var timeStamp flagTimeStamp = flagTimeStamp(time.Now())
-var roller util.Roller
+
+//flags
+var timeStamp time.Time
+var timeStampString = time.Now().Format(dateLayout + timeLayout)
+var rollerString string
+var rollr *roller.Roller
+
+//args
 var filename string
 var count int
 
 func init() {
     flagSet = flag.NewFlagSet("main", flag.ExitOnError)
-    flagSet.Usage = printUsage
-    flagSet.Var(&roller, "roll", "the roller to use on subsequent files\n\t> format = <roll-type>[<sign><integer>]\n\t> where roll-type is year|month|week|day|hour|min|sec\n\t> e.g. day+1")
-    flagSet.Var(&roller, "r", "shorthand for --roll")
-    flagSet.Var(&timeStamp, "time", "initial timestamp to use for the files\n\t> defaults to the current time\n\t> format = YYYYMMDD[hhmmss]")
-    flagSet.Var(&timeStamp, "t", "shorthand for --time")
+    flagSet.Usage = printHelp
+    flagSet.StringVar(&rollerString, "roll", rollerString, "the roller to use on subsequent files, format=(year|month|week|day|hour|min|sec)[<sign><int>], e.g. day+3")
+    flagSet.StringVar(&rollerString, "r", rollerString, "shorthand for -roll")
+    flagSet.StringVar(&timeStampString, "time", timeStampString, "initial timestamp to use for the files, format = YYYYMMDD[hhmmss]")
+    flagSet.StringVar(&timeStampString, "t", timeStampString, "shorthand for -time")
 }
 
 func printUsage() {
     fmt.Println("usage: faker [options] <filename> [<count>]")
     fmt.Println("Options:")
-    flagSet.VisitAll(func(f *flag.Flag) {
-        dashes := "-"
-        if len(f.Name) > 1 {
-            dashes = "--"
-        }
-        fmt.Printf("%s%s:\t%s\n", dashes, f.Name, f.Usage)
-    })
+    flagSet.PrintDefaults()
 }
 
 func printHelp() {
-    fmt.Println("faker, the file maker - a utility for creating files")
+    fmt.Println("faker, a file maker - a utility for creating files")
     printUsage()
 }
 
 func parseArgs() error {
     flagSet.Parse(os.Args[1:])
 
+    timeStampLayout := dateLayout
+    if len(timeStampString) > 8 {
+        timeStampLayout += timeLayout
+    }
+    var err error
+    if timeStamp, err = time.Parse(timeStampLayout, timeStampString); err != nil {
+        return errors.New("invalid usage: bad timestamp")
+    }
+
+    if rollerString != "" {
+        if rollr, err = roller.New(rollerString); err != nil {
+            return errors.New("invalid usage: bad roller")
+        }
+    }
+
     switch flagSet.NArg() {
     case 1:
         count = 1
     case 2:
-        var err error
         if count, err = strconv.Atoi(flagSet.Arg(1)); err != nil || count <= 0 {
             return errors.New("invalid usage: count must be a positive integer")
         }
@@ -78,14 +77,47 @@ func parseArgs() error {
     return nil
 }
 
+func GetFilenames(name string, count int) (names []string) {
+    if count <= 1 {
+        return []string{name}
+    }
+
+    suffixStartIndex := strings.LastIndex(name, ".")
+    filenamePrefix, filenameSuffix := name, ""
+    if suffixStartIndex != -1 {
+        filenamePrefix = name[0:suffixStartIndex]
+        filenameSuffix = name[suffixStartIndex:]
+    }
+    names = make([]string, count)
+    for i := 0; i < count; i++ {
+        names[i] = fmt.Sprintf("%s%d%s", filenamePrefix, i+1, filenameSuffix)
+    }
+    return
+}
+
+func createFile(name string, ts time.Time) {
+    if _, err := os.Create(name); err != nil {
+        fmt.Printf("failed to create: %s\n", name)
+    } else {
+        if err := os.Chtimes(name, timeStamp, timeStamp); err != nil {
+            fmt.Printf("created: %s, but failed to set the correct timestamp\n", name)
+        } else {
+            fmt.Printf("created: %s @ %s\n", name, timeStamp.Format(dateLayout+timeLayout))
+        }
+    }
+}
+
 func main() {
     if err := parseArgs(); err != nil {
         fmt.Printf("%s\n", err)
         printUsage()
+        return
     }
 
-    filenames := util.GetFilenames(filename, count)
+    filenames := GetFilenames(filename, count)
+
     for _, name := range filenames {
-        fmt.Printf("created: %s\n", name)
+        createFile(name, timeStamp)
+        timeStamp, _ = rollr.Roll(timeStamp)
     }
 }
