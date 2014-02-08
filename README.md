@@ -3,8 +3,6 @@ faker
 
 a utility for creating a bunch of files with rolling timestamps
 
-Note: it can only spoof access and modification time stamps
-
 Install
 -------
 
