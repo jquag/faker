@@ -11,13 +11,13 @@ import (
     "time"
 )
 
-const dateLayout, timeLayout = "20060102", "150405"
+const timeLayout = "200601021504"
 
 var flagSet *flag.FlagSet
 
 //flags
 var timeStamp time.Time
-var timeStampString = time.Now().Format(dateLayout + timeLayout)
+var timeStampString = "CURRENT TIME" //time.Now().Format(dateLayout + timeLayout)
 var rollerString string
 var rollr *roller.Roller
 
@@ -30,7 +30,7 @@ func init() {
     flagSet.Usage = printHelp
     flagSet.StringVar(&rollerString, "roll", rollerString, "the roller to use on subsequent files, format=(year|month|week|day|hour|min|sec)[<sign><int>], e.g. day+3")
     flagSet.StringVar(&rollerString, "r", rollerString, "shorthand for -roll")
-    flagSet.StringVar(&timeStampString, "time", timeStampString, "initial timestamp to use for the files, format = YYYYMMDD[hhmmss]")
+    flagSet.StringVar(&timeStampString, "time", timeStampString, "initial timestamp to use for the files, format = YYYYMMDD[hhmm]")
     flagSet.StringVar(&timeStampString, "t", timeStampString, "shorthand for -time")
 }
 
@@ -47,14 +47,17 @@ func printHelp() {
 
 func parseArgs() error {
     flagSet.Parse(os.Args[1:])
-
-    timeStampLayout := dateLayout
-    if len(timeStampString) > 8 {
-        timeStampLayout += timeLayout
-    }
     var err error
-    if timeStamp, err = time.Parse(timeStampLayout, timeStampString); err != nil {
-        return errors.New("invalid usage: bad timestamp")
+    now := time.Now()
+    if timeStampString == "CURRENT TIME" {
+        timeStamp = now
+    } else {
+        if len(timeStampString) <= 8 {
+            timeStampString += now.Format("1504")
+        }
+        if timeStamp, err = time.ParseInLocation(timeLayout, timeStampString, time.Now().Location()); err != nil {
+            return errors.New("invalid usage: bad timestamp")
+        }
     }
 
     if rollerString != "" {
@@ -98,13 +101,14 @@ func GetFilenames(name string, count int) (names []string) {
 func createFile(name string, ts time.Time) {
     if _, err := os.Stat(name); err == nil {
         fmt.Printf("%s already exists, not touching\n", name)
-    } else if _, err := os.Create(name); err != nil {
-        fmt.Printf("failed to create: %s\n", name)
+    } else if file, err := os.Create(name); err != nil {
+        fmt.Printf("failed to create: %s because of %s\n", name, err)
     } else {
+        file.Close()
         if err := os.Chtimes(name, timeStamp, timeStamp); err != nil {
             fmt.Printf("created: %s, but failed to set the correct timestamp\n", name)
         } else {
-            fmt.Printf("created: %s @ %s\n", name, timeStamp.Format(dateLayout+timeLayout))
+            fmt.Printf("created: %s @ %s\n", name, timeStamp.Format(timeLayout))
         }
     }
 }
